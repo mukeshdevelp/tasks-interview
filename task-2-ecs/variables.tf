@@ -25,7 +25,7 @@ variable "app_name" {
 }
 
 # Database hostname stored in SSM and injected into the container as DB_HOST.
-
+# Set in ~/.bashrc as TF_VAR_db_host.
 variable "db_host" {
   description = "Database host loaded from AWS Parameter Store. Set via TF_VAR_db_host in ~/.bashrc."
   type        = string
@@ -41,7 +41,7 @@ variable "api_key" {
 }
 
 # Database password stored in Secrets Manager and injected as DB_PASSWORD.
-
+# Set in ~/.bashrc as TF_VAR_db_password.
 variable "db_password" {
   description = "Database password loaded from AWS Secrets Manager. Set via TF_VAR_db_password in ~/.bashrc."
   type        = string

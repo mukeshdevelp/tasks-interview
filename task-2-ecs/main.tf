@@ -1,4 +1,4 @@
-# region and default tags
+# AWS provider configured for the target region with shared default tags.
 provider "aws" {
   region = var.aws_region
 
@@ -7,10 +7,10 @@ provider "aws" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Networking
+# ---------------------------------------------------------------------------
 
-
-
-# Networking - vpc
 # Isolated network for the ALB, ECS tasks, and related resources.
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -18,13 +18,11 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 }
 
-# Networking - igw
 # Internet gateway so public subnets can reach the internet.
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 }
 
-# Networking - pub subnets
 # Two public subnets across different AZs (required by the ALB).
 resource "aws_subnet" "public" {
   count = 2
@@ -34,7 +32,7 @@ resource "aws_subnet" "public" {
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
 }
-# route table public
+
 # Route table sending all outbound traffic from public subnets to the internet.
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -45,7 +43,6 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Networkroute table association public
 # Associate each public subnet with the public route table.
 resource "aws_route_table_association" "public" {
   count = 2
@@ -53,7 +50,7 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
-# alb secruity group
+
 # Allow inbound HTTP from the internet to the load balancer.
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
@@ -75,7 +72,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-# ecs task security group
+
 # Allow inbound app traffic only from the ALB security group.
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project_name}-ecs-sg"
@@ -98,9 +95,9 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
-
+# ---------------------------------------------------------------------------
 # Container registry and image build
-# repo ECR
+# ---------------------------------------------------------------------------
 
 # Private Docker registry for the Flask application image.
 resource "aws_ecr_repository" "app" {
@@ -112,7 +109,7 @@ resource "aws_ecr_repository" "app" {
     scan_on_push = true
   }
 }
-# pushing the docker image to ECR
+
 # Build the Docker image locally and push it to ECR during terraform apply.
 resource "null_resource" "docker_build_push" {
   triggers = {
@@ -135,9 +132,10 @@ resource "null_resource" "docker_build_push" {
   depends_on = [aws_ecr_repository.app]
 }
 
+# ---------------------------------------------------------------------------
 # Runtime configuration (no .env baked into the Docker image)
+# ---------------------------------------------------------------------------
 
-# ssm parameter and secrets manager
 # Non-sensitive app name stored in SSM and injected as APP_NAME.
 resource "aws_ssm_parameter" "app_name" {
   name  = "/${var.project_name}/APP_NAME"
@@ -151,7 +149,7 @@ resource "aws_ssm_parameter" "db_host" {
   type  = "String"
   value = var.db_host
 }
-# secret manager -api key and db password
+
 # Sensitive API key stored in Secrets Manager and injected as API_KEY.
 resource "aws_secretsmanager_secret" "api_key" {
   name                    = "${var.project_name}-api-key"
@@ -175,29 +173,29 @@ resource "aws_secretsmanager_secret_version" "db_password" {
   secret_id     = aws_secretsmanager_secret.db_password.id
   secret_string = var.db_password
 }
-# loggin cloudwatch on ECS task
+
 # CloudWatch log group for container stdout/stderr from Gunicorn/Flask.
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project_name}"
   retention_in_days = 7
 }
 
-
-# IAM - role execution
-
+# ---------------------------------------------------------------------------
+# IAM
+# ---------------------------------------------------------------------------
 
 # Role used by the ECS agent to pull images, write logs, and fetch secrets.
 resource "aws_iam_role" "ecs_task_execution" {
   name               = "${var.project_name}-ecs-execution-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
 }
-# attach managed policy for ECR image pull and CloudWatch log delivery
+
 # Managed policy for ECR image pull and CloudWatch log delivery.
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
-# IAM policy
+
 # Inline policy granting read access to SSM parameters and Secrets Manager secrets.
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   name   = "${var.project_name}-ecs-execution-secrets"
@@ -205,9 +203,9 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   policy = data.aws_iam_policy_document.ecs_task_execution_secrets.json
 }
 
-
-# ECS - main ecs cluster, task definition, and service
-
+# ---------------------------------------------------------------------------
+# ECS
+# ---------------------------------------------------------------------------
 
 # Logical grouping for ECS services and tasks.
 resource "aws_ecs_cluster" "main" {
@@ -218,7 +216,7 @@ resource "aws_ecs_cluster" "main" {
     value = "disabled"
   }
 }
-# task definition for fargate container
+
 # Blueprint for the Fargate container: image, ports, secrets, and logging.
 resource "aws_ecs_task_definition" "app" {
   family                   = var.project_name
@@ -242,7 +240,7 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
-      # Inject env vars from AWS at startup 
+      # Inject env vars from AWS at startup instead of baking a .env into the image.
       secrets = [
         {
           name      = "APP_NAME"
@@ -275,7 +273,7 @@ resource "aws_ecs_task_definition" "app" {
 
   depends_on = [null_resource.docker_build_push]
 }
-# service from task definition
+
 # Keeps one Fargate task running and registers it with the ALB target group.
 resource "aws_ecs_service" "app" {
   name            = var.project_name
@@ -302,9 +300,9 @@ resource "aws_ecs_service" "app" {
   ]
 }
 
-
+# ---------------------------------------------------------------------------
 # Load balancer (public HTTP access)
-
+# ---------------------------------------------------------------------------
 
 # Internet-facing application load balancer in front of ECS tasks.
 resource "aws_lb" "main" {
@@ -314,7 +312,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 }
-# ALB target group
+
 # Target group routing traffic to Fargate task IPs on port 5000.
 resource "aws_lb_target_group" "app" {
   name        = "${var.project_name}-tg"
@@ -335,7 +333,7 @@ resource "aws_lb_target_group" "app" {
     unhealthy_threshold = 3
   }
 }
-# listener for alb
+
 # HTTP listener on port 80 forwarding all requests to the target group.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
