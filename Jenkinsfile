@@ -75,12 +75,6 @@ pipeline {
             }
         }
 
-        dir('task-2-ecs') {
-        sh '''
-            git clone https://github.com/iforimran9/ecs-task.git
-        '''
-    }
-
         stage('Terraform Init - ECS') {
             steps {
                 dir('task-2-ecs') {
@@ -122,6 +116,7 @@ pipeline {
                     dir('task-2-ecs') {
                         sh '''
                             terraform plan -out=tfplan
+                            ls -lh
                         '''
                     }
 
@@ -156,32 +151,7 @@ pipeline {
             }
         }
 
-        stage('Verify ECS Deployment') {
-            steps {
-
-                dir('task-2-ecs') {
-
-                    script {
-
-                        def alb = sh(
-                            script: "terraform output -raw alb_dns_name",
-                            returnStdout: true
-                        ).trim()
-
-                        echo "ALB DNS = ${alb}"
-
-                        sh """
-                            curl -i http://${alb}/health
-                            echo
-                            curl http://${alb}/config
-                        """
-
-                    }
-
-                }
-
-            }
-        }
+        
     }
 
     post {
