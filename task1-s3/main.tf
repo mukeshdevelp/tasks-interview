@@ -62,7 +62,7 @@ resource "aws_s3_object" "images" {
   )
 }
 
-# Upload the generated gallery HTML page to S3 as index.html.
+# Upload the generated gallery HTML page to S3 as index.html - storing index.html
 resource "aws_s3_object" "index_page" {
   bucket  = aws_s3_bucket.gallery.id
   key     = "index.html"
@@ -119,6 +119,7 @@ resource "aws_cloudfront_distribution" "gallery" {
 
     forwarded_values {
       query_string = false # Do not forward query strings to S3.
+      headers      = []    # S3 origins cannot use wildcard header forwarding.
 
       cookies {
         forward = "none" # Do not forward cookies to S3.

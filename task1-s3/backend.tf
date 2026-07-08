@@ -22,5 +22,6 @@ terraform {
     key = "s3-task/terraform.tfstate"
     
     region = "eu-central-1"
+    
   }
 }

@@ -7,9 +7,7 @@ provider "aws" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Networking
-# ---------------------------------------------------------------------------
 
 # Isolated network for the ALB, ECS tasks, and related resources.
 resource "aws_vpc" "main" {
@@ -95,9 +93,8 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
-# ---------------------------------------------------------------------------
+
 # Container registry and image build
-# ---------------------------------------------------------------------------
 
 # Private Docker registry for the Flask application image.
 resource "aws_ecr_repository" "app" {
@@ -132,9 +129,8 @@ resource "null_resource" "docker_build_push" {
   depends_on = [aws_ecr_repository.app]
 }
 
-# ---------------------------------------------------------------------------
 # Runtime configuration (no .env baked into the Docker image)
-# ---------------------------------------------------------------------------
+
 
 # Non-sensitive app name stored in SSM and injected as APP_NAME.
 resource "aws_ssm_parameter" "app_name" {
@@ -180,9 +176,8 @@ resource "aws_cloudwatch_log_group" "app" {
   retention_in_days = 7
 }
 
-# ---------------------------------------------------------------------------
 # IAM
-# ---------------------------------------------------------------------------
+
 
 # Role used by the ECS agent to pull images, write logs, and fetch secrets.
 resource "aws_iam_role" "ecs_task_execution" {
@@ -203,9 +198,9 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   policy = data.aws_iam_policy_document.ecs_task_execution_secrets.json
 }
 
-# ---------------------------------------------------------------------------
+
 # ECS
-# ---------------------------------------------------------------------------
+
 
 # Logical grouping for ECS services and tasks.
 resource "aws_ecs_cluster" "main" {
