@@ -93,14 +93,14 @@ resource "aws_cloudfront_distribution" "combined" {
   price_class = "PriceClass_100"
   http_version = "http2and3"
 
-  # Origin 1 — private S3 gallery (same bucket + OAC as task1).
+  # Origin 1 — private S3 gallery.
   origin {
     domain_name              = data.aws_s3_bucket.gallery.bucket_regional_domain_name
     origin_id                = "gallery-s3-origin"
     origin_access_control_id = var.cloudfront_oac_id
   }
 
-  # Origin 2 — ECS ALB from task-2-ecs.
+  # Origin 2 — ECS ALB 
   origin {
     domain_name = data.aws_lb.ecs.dns_name
     origin_id   = "ecs-alb-origin"
@@ -134,7 +134,7 @@ resource "aws_cloudfront_distribution" "combined" {
     }
   }
 
-  # Gallery images → S3.
+  # Gallery images -  S3.
   ordered_cache_behavior {
     path_pattern           = "/images/*"
     target_origin_id       = "gallery-s3-origin"
